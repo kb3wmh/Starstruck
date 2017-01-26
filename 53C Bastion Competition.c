@@ -36,6 +36,46 @@
 // Drivetrain -- 2,3,4,5
 // Lift -- 7,7,8,9
 
+//-------------Initialize Variables-------------//
+
+
+// Autonomous Mode Variables
+int autoMode = 1;
+int driveForward = 1;
+int driveBack = -1;
+int left = 1;
+int right = 2;
+int forwards = 1;
+int backwards = -1;
+float wheelBase = 11.0; // Given in inches
+float fullTurnCircumference = PI * wheelBase;
+float wheelRotationDistance = 4.0 * PI;
+
+//---Variables for User Control---//
+bool reverser = false;
+bool b7DOld = false;
+bool sound = false;
+bool b8DOld = false;
+bool hold = false;
+int driverControlModeCount = 1;
+
+//---Joystick Variables & Deadzone--//
+int Y2 = 0, Y1 = 0, threshold = 15;
+
+//---Constant lift parameters---//
+int liftEncoderMaxValue = 127;
+int liftEncoderMinValue = 0;
+int liftMaxSpeed = 120;
+int up = 1;
+int down = -1;
+
+//---Used as to control automatic lift---//
+bool autoRaiseLift = false;
+bool autoLowerLift = false;
+bool liftAutoMode = false;
+bool autoMiddleLift = false;
+int lift;
+
 //-------------PID LOOPS--------------//
 #pragma DebuggerWindows("Globals")
 #pragma DebuggerWindows("Motors")
@@ -91,15 +131,6 @@ int degreesToTicks (float degree) //method is more accurate
 	return ticks;
 }
 
-int degresstoTicksBeta (float degree)
-{
-	float turningRadius = 6.5; //inches, also guessed value
-	float turningCircumference = 2 * PI * turningRadius;
-	int ticksPerTurn = inchtoTicks(turningCircumference);
-	int ticks = degree * ticksPerTurn / 360;
-	return ticks;
-}
-
 int timerValue (float seconds)
 {
 	int miliseconds;
@@ -111,7 +142,7 @@ int timerValue (float seconds)
 	return miliseconds;
 }
 
-//PID control for moving forwards and backwards
+//-------------MAIN PID CONTROLLER-------------//
 void PIDBaseControl (float distance, float waitTime, float maxPower = 1)
 {
 	float Kp = .2; //constant
@@ -264,100 +295,15 @@ void PIDBaseTurn (float distance, float waitTime, float maxPower = 1)
 	turnBase(0);
 }
 
-//-------------Initialize Variables-------------//
-
-
-// Autonomous Mode Variables
-int autonomousMode;
-int driveForward = 1;
-int driveBack = -1;
-int left = 1;
-int right = 2;
-int forwards = 1;
-int backwards = -1;
-float wheelBase = 11.0; // Given in inches
-float fullTurnCircumference = PI * wheelBase;
-float wheelRotationDistance = 4.0 * PI;
-
-
-
-//---Variables for User Control---//
-bool reverser = false;
-bool b7DOld = false;
-bool sound = false;
-bool b8DOld = false;
-bool hold = false;
-
-//---Joystick Variables & Deadzone--//
-int Y2 = 0, Y1 = 0, threshold = 15;
-
-//---Constant lift parameters---//
-int liftEncoderMaxValue = 127;
-int liftEncoderMinValue = 0;
-int liftMaxSpeed = 120;
-int up = 1;
-int down = -1;
-
-//---Used as to control automatic lift---//
-bool autoRaiseLift = false;
-bool autoLowerLift = false;
-bool liftAutoMode = false;
-bool autoMiddleLift = false;
-int lift;
-
 //-------------Robot Functions-------------//
-
-
-int ticksToInches(int ticks) {
-	float inches;
-	inches = (ticks/360) * (4 * PI);
-	return inches;
-}
-
-//Converts the degrees to turn into encoderTicks
-int degreesToTicksBeta (float degree)
-{
-	float turningRadius = 6.5; //inches, also guessed value
-	float turningCircumference = 2 * PI * turningRadius;
-	int ticksPerTurn = inchtoTicks(turningCircumference);
-	int ticks = degree * ticksPerTurn / 360;
-	return ticks;
-}
 
 
 void moveBase(float distance, int speed)
 {
 	SensorValue[rightFront] = 0;
-	while (ticksToInches(SensorValue[rightFront]) < distance) {
+	while (inchtoTicks(SensorValue[rightFront]) < distance) {
 		motor[leftDT] = speed;
 		motor[rightDT] = speed;
-	}
-}
-
-void autoMoveBase(int direction, int speed)
-{
-	int drive = direction * speed;
-	motor[leftDT] = drive;
-	motor[rightDT] = drive;
-}
-
-void moveRightBase (int speed)
-{
-	motor[rightDT] = speed;
-}
-
-void moveLeftBase (int speed)
-{
-	motor[leftDT] = speed;
-}
-
-void turnBase(float degrees, int speed) //positive is clockwise
-{
-	SensorValue[rightFront] = 0;
-	SensorValue[leftFront] = 0;
-	while (degreesToTicksBeta(SensorValue[rightFront]) < degreesToTicksBeta(degrees) && abs(degreesToTicksBeta(SensorValue[leftFront])) < degreesToTicksBeta(degrees)) {
-		motor[leftDT] = speed;
-		motor[rightDT] = -speed;
 	}
 }
 
@@ -367,61 +313,6 @@ void stopMovement(){
 	motor[rightDT] = 0;
 }
 
-// USAGE: drive([driveForward, driveBack], distanceInInches);
-void drive(int direction, int distance) {
-	// Calculate number of ticks to travel
-	float numberOfRotations = distance / (4.0 * PI);
-	float numberOfTicks = numberOfRotations / 360.0;
-
-	// Determine the robot's current position
-	int leftDTPos = SensorValue[leftFront];
-	int rightDTPos = SensorValue[rightFront];
-
-	// Adds/Subtracts the target number of ticks to travel
-	int targetLeftDTPos = leftDTPos + (direction * numberOfTicks);
-	int targetRightDTPos = rightDTPos + (direction * numberOfTicks);
-
-	// Forward
-	if (direction == 1){
-		while ((SensorValue[leftFront] < targetLeftDTPos) || (SensorValue[rightFront] < targetRightDTPos)){
-			if (SensorValue[leftFront] < targetLeftDTPos){
-				motor[leftDT] = 80;
-			}
-			else{
-				motor[leftDT] = 0;
-			}
-
-			if (SensorValue[rightFront] < targetLeftDTPos){
-				motor[rightDT] = 80;
-			}
-			else{
-				motor[rightDT] = 0;
-			}
-		}
-		stopMovement();
-	}
-
-	// Reverse
-	else {
-		while ((SensorValue[leftFront] > targetLeftDTPos) || (SensorValue[rightFront] > targetRightDTPos)){
-			if (SensorValue[leftFront] > targetLeftDTPos){
-				motor[leftDT] = -80;
-			}
-			else{
-				motor[leftDT] = 0;
-			}
-
-			if (SensorValue[rightFront] > targetLeftDTPos){
-				motor[rightDT] = -80;
-			}
-			else{
-				motor[rightDT] = 0;
-			}
-		}
-		stopMovement();
-	}
-
-}
 
 // Moves the lift. Takes two parameters: direction and speed.
 void moveLift(int direction, int liftSpeed){
@@ -434,16 +325,14 @@ void moveLift(int direction, int liftSpeed){
 	motor[botRight] = lift;
 }
 
-
-
 // Backspins the lift motors to keep it from falling
 void holdLift() {
-	moveLift(up, 15);
+	moveLift(up, 10);
 }
 
 // Calls the holdLift() function to lock the lift
 void stopLift(){
-	holdLift();
+	moveLift(up, 0);
 	autoLowerLift = false;
 	autoRaiseLift = false;
 }
@@ -511,87 +400,139 @@ void automaticLift(bool autoRaiseLift, bool autoLowerLift, bool autoMiddleLift) 
 	}
 }
 
-// turnAngle -- Degrees
-int calculateEncoderTurn(float turnAngle){
-	float turnAngleInRadians = turnAngle * (PI / 180);
-	float distanceToTravel = turnAngleInRadians / fullTurnCircumference;
-	float wheelRotations = distanceToTravel / wheelRotationDistance;
-	int encoderTicks = wheelRotations * 90.0;
-
-	return encoderTicks;
-}
-
-// USAGE -- turn(degrees, [left, right]);
-void turn(float turnAngle, int direction){
-	int encoderTicks = calculateEncoderTurn(turnAngle);
-	if (direction == right){
-		int leftTarget = encoderTicks;
-		int rightTarget = -1 * encoderTicks;
-		int currentLeftPos = SensorValue[leftFront];
-		int currentRightPos = SensorValue[rightFront];
-
-		leftTarget += currentLeftPos;
-		rightTarget += currentRightPos;
-
-		while ((SensorValue[rightFront] > rightTarget) && (SensorValue[leftFront] < leftTarget)){
-			motor[leftDT] = 63;
-			motor[rightDT] = -63;
-		}
-	}
-
-	if (direction == left){
-		int leftTarget = -1 * encoderTicks;
-		int rightTarget = encoderTicks;
-		int currentLeftPos = SensorValue[leftFront];
-		int currentRightPos = SensorValue[rightFront];
-
-		leftTarget += currentLeftPos;
-		rightTarget += currentRightPos;
-
-		while (( SensorValue[rightFront] < rightTarget) && (SensorValue[leftFront] > rightTarget)){
-			motor[leftDT] = -63;
-			motor[rightDT] = 63;
-		}
-	}
-	stopMovement();
-}
-
-
-
-void pre_auton()
+//----LCD Functions----//
+void clearLCD()
 {
-	// Set bStopTasksBetweenModes to false if you want to keep user created tasks running between
-	// Autonomous and Tele-Op modes. You will need to manage all user created tasks if set to false.
-	bStopTasksBetweenModes = true;
-	/*// Sets up the LCD display with the auto selection menu
 	clearLCDLine(0);
 	clearLCDLine(1);
-
-	displayLCDString(0,0,"|");
-	displayLCDString(1, 0, "V");
-	displayLCDString(0,16,"|");
-	displayLCDString(1,16, "V");
-	displayLCDCenteredString(0, "1-Auto Mode-2");
-	autonomousMode = 1; // Default auto is 1
-	while(true){
-	if (nLCDButtons == 1){
-	autonomousMode = 1;
-	setLCDPosition(1,8);
-	displayNextLCDNumber(1);
-	}
-	if (nLCDButtons == 4){
-	autonomousMode = 2;
-	setLCDPosition(1,8);
-	displayNextLCDNumber(2);
-	}
-	}*/
 }
 
+void displayBatteryVoltage()
+{
+	string mainBatteryVoltage;
+	string secondaryBatteryVoltage;//secondary battery
+	displayLCDString(0, 0, "Main:");
+	displayLCDString(1, 0, "Second:");
+	sprintf(mainBatteryVoltage, "%1.2f%c", nImmediateBatteryLevel/1000.0, 'V');
+	sprintf(secondaryBatteryVoltage, "%1.3c%", BackupBatteryLevel/1000.0, 'V');
+	displayLCDString(0, 8, mainBatteryVoltage);
+	displayLCDString(1, 8, secondaryBatteryVoltage);
 
-//-------------Autonomous Code-------------//
+}
 
+task driverControlViewValues()
+{
+	clearLCD();
+	while (true)
+	{
+		if (nLCDButtons == 1)
+		{
+			driverControlModeCount--;
+			clearLCD();
+			while(nLCDButtons == 1)
+			{
+				wait1Msec(10);
+			}
+		}
+		if (nLCDButtons == 4)
+		{
+			driverControlModeCount++;
+			clearLCD();
+			while(nLCDButtons == 4)
+			{
+				wait1Msec(10);
+			}
+		}
+		if (driverControlModeCount < 1)
+		{
+			driverControlModeCount = 12;
+		}
+		else if (driverControlModeCount > 12)
+		{
+			driverControlModeCount = 1;
+		}
+		if (driverControlModeCount == 1)
+		{
+			displayBatteryVoltage();
+		}
+		else if (driverControlModeCount == 2)
+		{
+			displayLCDCenteredString(0, "Currently");
+			displayLCDCenteredString(1, "Empty");
+		}
+		else if (driverControlModeCount == 3)
+		{
+			displayLCDCenteredString(0, "Currently");
+			displayLCDCenteredString(1, "Empty");
+		}
+		else if (driverControlModeCount == 4)
+		{
+			displayLCDCenteredString(0, "Currently");
+			displayLCDCenteredString(1, "Empty");
+		}
+		else if (driverControlModeCount == 5)
+		{
+			displayLCDCenteredString(0, "Currently");
+			displayLCDCenteredString(1, "Empty");
+		}
+		else if (driverControlModeCount == 6)
+		{
+			displayLCDCenteredString(0, "Currently");
+			displayLCDCenteredString(1, "Empty");
+		}
+		else if (driverControlModeCount == 7)
+		{
+			displayLCDCenteredString(0, "Currently");
+			displayLCDCenteredString(1, "Empty");
+		}
+		else if (driverControlModeCount == 8)
+		{
+			displayLCDCenteredString(0, "Currently");
+			displayLCDCenteredString(1, "Empty");
+		}
+		wait1Msec(10);
+	}
+}
 
-task autonomous()
+void autoSelection()
+{
+	clearLCD();
+	while (nLCDButtons != 2)
+	{
+		displayLCDCenteredString(0, "Autonomous");
+		displayLCDNumber(0, 14, autoMode, 2);
+		displayLCDCenteredString(1, "<< Selection >>");
+		if (nLCDButtons == 1)
+		{
+			autoMode--;
+			while(nLCDButtons == 1)
+			{
+				wait1Msec(10);
+			}
+		}
+		if (nLCDButtons == 4)
+		{
+			autoMode++;
+			while (nLCDButtons == 4)
+			{
+				wait1Msec(10);
+			}
+		}
+		if (autoMode < 1)
+		{
+			autoMode = 12;
+		}
+		else if (autoMode > 12)
+		{
+			autoMode = 1;
+		}
+		wait1Msec(10);
+	}
+	clearLCD();
+}
+
+//right side cube auto
+void auto1()
 {
 	openClaw();
 	wait1Msec(250);
@@ -617,39 +558,143 @@ task autonomous()
 	while(SensorValue[rightFront] - SensorValue[leftFront] < 400) {
 		motor[leftDT] = 80;
 		motor[rightDT] = -80;
-}
+	}
 	motor[leftDT] = 80;
 	motor[rightDT] = 80;
 	wait1Msec(800);
 	stopMovement();
 	wait1Msec(200);
 	raiseLift();
-  wait1Msec(850);
+	wait1Msec(850);
 	openClaw();
 	wait1Msec(400);
 	stopLift();
-	wait1Msec(400);
-	stopClaw();
-  wait1Msec(1000);
-	lowerLift();
-	wait1Msec(800);
-	stopLift();
-	moveBase(5, -100);
-	wait1Msec(250);
-	closeClaw();
-	wait1Msec(600);
-	stopClaw();
 	wait1Msec(100);
-  autoMoveBase(-1, 100);
-	wait1Msec(2000);
-	stopMovement();
-	raiseLift();
-	wait1Msec(800);
+	stopClaw();
+}
+
+//right side star auto
+void auto2()
+{
 	openClaw();
-	stopLift();
 	wait1Msec(500);
 	stopClaw();
+	wait1Msec(3000);
 	lowerLift();
+	wait1Msec(500);
+	closeClaw();
+	wait1Msec(200);
+	stopClaw();
+	wait1Msec(500);
+	motor[leftDT] = -100;
+	motor[rightDT] = -100;
+	wait1Msec(2500);
+	stopMovement();
+	wait1Msec(100);
+	closeClaw();
+	raiseLift();
+	wait1Msec(800);
+	holdLift();
+	wait1Msec(500);
+	motor[leftDT] = 100;
+	motor[rightDT] = 100;
+	wait1Msec(1200);
+	stopMovement();
+	wait1Msec(100);
+	motor[leftDT] = -50;
+	motor[leftDT] = 50;
+	wait1Msec(1550);
+	motor[leftDT] = 100;
+	motor[rightDT] = 100;
+	wait1Msec(1000);
+	raiseLift();
+	wait1Msec(300);
+	openClaw();
+	wait1Msec(1000);
+	stopClaw();
+	wait1Msec(3000);
+	stopLift();
+}
+
+//right side cube and star auto
+void auto3()
+{
+	PIDBaseControl(12, 1, 50);
+	wait1Msec(1000);
+	PIDBaseTurn(45, 1, 30);
+}
+
+//left side cube auto
+void auto4()
+{
+}
+
+//left side star auto
+void auto5()
+{
+}
+
+//left side cube and star auto
+void auto6()
+{
+}
+
+//PID cube right auto
+void auto7()
+{
+}
+
+//PID star right auto
+void auto8()
+{
+}
+
+void pre_auton()
+{
+	// Set bStopTasksBetweenModes to false if you want to keep user created tasks running between
+	// Autonomous and Tele-Op modes. You will need to manage all user created tasks if set to false.
+	bStopTasksBetweenModes = true;
+	autoSelection();
+}
+
+
+//-------------Autonomous Code-------------//
+
+
+task autonomous()
+{
+	if (autoMode == 1)
+	{
+		auto1();
+	}
+	else if (autoMode == 2)
+	{
+		auto2();
+	}
+	else if (autoMode == 3)
+	{
+		auto3();
+	}
+	else if (autoMode == 4)
+	{
+		auto4();
+	}
+	else if (autoMode == 5)
+	{
+		auto5();
+	}
+	else if (autoMode == 6)
+	{
+		auto6();
+	}
+	else if (autoMode == 7)
+	{
+		auto7();
+	}
+	else if (autoMode == 8)
+	{
+		auto8();
+	}
 }
 
 
