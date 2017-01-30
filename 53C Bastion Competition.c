@@ -1,12 +1,13 @@
 #pragma config(I2C_Usage, I2C1, i2cSensors)
-#pragma config(Sensor, in1,    autoPot,        sensorPotentiometer)
-#pragma config(Sensor, dgtl3,  sensor_Lift,    sensorQuadEncoder)
+#pragma config(Sensor, in1,    leftClawPot,    sensorPotentiometer)
+#pragma config(Sensor, in2,    rightClawPot,   sensorPotentiometer)
+#pragma config(Sensor, dgtl1,  sensor_Lift,    sensorQuadEncoder)
 #pragma config(Sensor, dgtl5,  rightFront,     sensorQuadEncoder)
 #pragma config(Sensor, dgtl7,  leftFront,      sensorQuadEncoder)
 #pragma config(Sensor, dgtl9,  leftBack,       sensorQuadEncoder)
 #pragma config(Sensor, dgtl11, rightBack,      sensorQuadEncoder)
-#pragma config(Sensor, I2C_1,  ,               sensorQuadEncoderOnI2CPort,    , AutoAssign )
-#pragma config(Sensor, I2C_2,  ,               sensorQuadEncoderOnI2CPort,    , AutoAssign )
+#pragma config(Sensor, I2C_1,  rightIME,       sensorQuadEncoderOnI2CPort,    , AutoAssign )
+#pragma config(Sensor, I2C_2,  leftIME,        sensorQuadEncoderOnI2CPort,    , AutoAssign )
 #pragma config(Motor,  port1,           clawRight,     tmotorVex393_HBridge, openLoop, reversed)
 #pragma config(Motor,  port2,           leftDT,        tmotorVex393_MC29, openLoop, reversed)
 #pragma config(Motor,  port3,           rightDT,       tmotorVex393_MC29, openLoop)
@@ -33,8 +34,9 @@
 //Y DRIVETRAIN PROGRAM
 
 //---Motor Connections---//
-// Drivetrain -- 2,3,4,5
-// Lift -- 7,7,8,9
+// Drivetrain -- 2,3
+// Lift -- 4,5,6,7,8,9
+//Claw -- 1,2
 
 //-------------Initialize Variables-------------//
 
@@ -50,6 +52,7 @@ int backwards = -1;
 float wheelBase = 11.0; // Given in inches
 float fullTurnCircumference = PI * wheelBase;
 float wheelRotationDistance = 4.0 * PI;
+int auton = 0;
 
 //---Variables for User Control---//
 bool reverser = false;
@@ -58,6 +61,7 @@ bool sound = false;
 bool b8DOld = false;
 bool hold = false;
 int driverControlModeCount = 1;
+int clawSpeedOpen = 127;
 
 //---Joystick Variables & Deadzone--//
 int Y2 = 0, Y1 = 0, threshold = 15;
@@ -337,6 +341,15 @@ void stopLift(){
 	autoRaiseLift = false;
 }
 
+void openClawTogether()
+{
+	while (SensorValue[leftClawPot] > 3633 && SensorValue[rightClawPot] > -200)
+	{
+		motor[clawRight] = clawSpeedOpen;
+		motor[clawLeft] = clawSpeedOpen;
+	}
+}
+
 // Raises the lift
 void raiseLift() {
 	moveLift(up, liftMaxSpeed);
@@ -363,12 +376,30 @@ void stopClaw(){
 	motor[clawLeft] = 0;
 }
 
+int clawSpeedClose = -127;
+
+
+void closeClawTogether()
+{
+	while (SensorValue[leftClawPot] < 3948 && SensorValue[rightClawPot] < 4095)
+	{
+		motor[clawRight] = clawSpeedClose;
+		motor[clawLeft] = clawSpeedClose;
+	}
+}
+
+
+
 // Automatic lift function: takes three parameters, telling it what mode to enter.
 void automaticLift(bool autoRaiseLift, bool autoLowerLift, bool autoMiddleLift) {
 	// These statements stop the lift once it has reached its desired height
 	if (autoRaiseLift || autoLowerLift || autoMiddleLift){
 		if (SensorValue[sensor_Lift] > liftEncoderMaxValue){
 			autoRaiseLift = false;
+			if (SensorValue[leftIME] >= 650 && SensorValue[leftIME] <= 900)
+			{
+				openClawTogether();
+			}
 		}
 		if (SensorValue[sensor_Lift] < liftEncoderMinValue){
 			autoLowerLift = false;
@@ -414,10 +445,9 @@ void displayBatteryVoltage()
 	displayLCDString(0, 0, "Main:");
 	displayLCDString(1, 0, "Second:");
 	sprintf(mainBatteryVoltage, "%1.2f%c", nImmediateBatteryLevel/1000.0, 'V');
-	sprintf(secondaryBatteryVoltage, "%1.3c%", BackupBatteryLevel/1000.0, 'V');
+	sprintf(secondaryBatteryVoltage, "%1.2c%", BackupBatteryLevel/1000.0, 'V');
 	displayLCDString(0, 8, mainBatteryVoltage);
 	displayLCDString(1, 8, secondaryBatteryVoltage);
-
 }
 
 task driverControlViewValues()
@@ -494,45 +524,100 @@ task driverControlViewValues()
 	}
 }
 
-void autoSelection()
+void leftPotValue()
 {
-	clearLCD();
-	while (nLCDButtons != 2)
-	{
-		displayLCDCenteredString(0, "Autonomous");
-		displayLCDNumber(0, 14, autoMode, 2);
-		displayLCDCenteredString(1, "<< Selection >>");
-		if (nLCDButtons == 1)
-		{
-			autoMode--;
-			while(nLCDButtons == 1)
-			{
-				wait1Msec(10);
-			}
-		}
-		if (nLCDButtons == 4)
-		{
-			autoMode++;
-			while (nLCDButtons == 4)
-			{
-				wait1Msec(10);
-			}
-		}
-		if (autoMode < 1)
-		{
-			autoMode = 12;
-		}
-		else if (autoMode > 12)
-		{
-			autoMode = 1;
-		}
-		wait1Msec(10);
-	}
-	clearLCD();
+	displayLCDCenteredString(0, "Left Pot");
+	displayLCDNumber(1, 5, SensorValue[leftClawPot], 6);
 }
 
-//right side cube auto
-void auto1()
+void rightPotValue()
+{
+	displayLCDCenteredString(0, "Right pot");
+	displayLCDNumber(1, 5, SensorValue[rightClawPot], 6);
+}
+
+void liftSensorValue()
+{
+	displayLCDCenteredString(0, "Lift quad");
+	displayLCDNumber(1, 5, SensorValue[sensor_Lift], 6);
+}
+
+void topRightIME()
+{
+	displayLCDCenteredString(0, "right IME");
+	displayLCDNumber(1, 5, SensorValue[rightIME], 6);
+}
+
+void topLeftIME()
+{
+	displayLCDCenteredString(0, "left IME");
+	displayLCDNumber(1, 5, SensorValue[leftIME], 6);
+}
+
+void displayAuton(){
+	switch(auton){
+	case 1:
+		displayLCDCenteredString(0, "right cube");
+		break;
+	case 2:
+		displayLCDCenteredString(0, "right star");
+		break;
+	case 3:
+		displayLCDCenteredString(0, "left cube");
+		break;
+	case 4:
+		displayLCDCenteredString(0, "left star");
+		break;
+	case 5:
+		leftPotValue();
+		break;
+	case 6:
+		rightPotValue();
+		break;
+	case 7:
+		liftSensorValue();
+		break;
+	case 9:
+		topRightIME();
+		break;
+	case 10:
+		topLeftIME();
+		break;
+	default:
+		displayLCDCenteredString(0, "no auto");
+	}
+}
+
+task LCDControl()
+{
+	clearLCDLine(0);
+	clearLCDLine(1);
+	bool noButtonsPressed = true;
+	displayAuton();
+	while(true)
+	{
+		if(noButtonsPressed)
+		{
+			switch(nLCDButtons){
+			case kButtonLeft:
+				auton--;
+				displayAuton();
+				break;
+			case kButtonCenter:
+				stopTask(LCDControl);
+				break;
+			case kButtonRight:
+				auton++;
+				displayAuton();
+				break;
+			}
+		}
+		noButtonsPressed = !nLCDButtons; //update if there is a button currently pressed
+		wait1Msec(20);
+	}
+}
+
+void rightCube()
 {
 	openClaw();
 	wait1Msec(250);
@@ -540,7 +625,7 @@ void auto1()
 	wait1Msec(250);
 	lowerLift();
 	wait1Msec(500);
-	moveBase(sqrt(4)*12, -100);
+	moveBase(sqrt(4)*12, 100);
 	stopMovement();
 	wait1Msec(500);
 	closeClaw();
@@ -556,11 +641,11 @@ void auto1()
 	wait1Msec(500);
 	wait1Msec(500);
 	while(SensorValue[rightFront] - SensorValue[leftFront] < 400) {
-		motor[leftDT] = 80;
-		motor[rightDT] = -80;
+		motor[leftDT] = -80;
+		motor[rightDT] = 80;
 	}
-	motor[leftDT] = 80;
-	motor[rightDT] = 80;
+	motor[leftDT] = -80;
+	motor[rightDT] = -80;
 	wait1Msec(800);
 	stopMovement();
 	wait1Msec(200);
@@ -573,8 +658,7 @@ void auto1()
 	stopClaw();
 }
 
-//right side star auto
-void auto2()
+void rightStar()
 {
 	openClaw();
 	wait1Msec(500);
@@ -586,8 +670,8 @@ void auto2()
 	wait1Msec(200);
 	stopClaw();
 	wait1Msec(500);
-	motor[leftDT] = -100;
-	motor[rightDT] = -100;
+	motor[leftDT] = 100;
+	motor[rightDT] = 100;
 	wait1Msec(2500);
 	stopMovement();
 	wait1Msec(100);
@@ -596,16 +680,16 @@ void auto2()
 	wait1Msec(800);
 	holdLift();
 	wait1Msec(500);
-	motor[leftDT] = 100;
-	motor[rightDT] = 100;
+	motor[leftDT] = -100;
+	motor[rightDT] = -100;
 	wait1Msec(1200);
 	stopMovement();
 	wait1Msec(100);
-	motor[leftDT] = -50;
 	motor[leftDT] = 50;
+	motor[leftDT] = -50;
 	wait1Msec(1550);
-	motor[leftDT] = 100;
-	motor[rightDT] = 100;
+	motor[leftDT] = -100;
+	motor[rightDT] = -100;
 	wait1Msec(1000);
 	raiseLift();
 	wait1Msec(300);
@@ -616,45 +700,31 @@ void auto2()
 	stopLift();
 }
 
-//right side cube and star auto
-void auto3()
-{
-	PIDBaseControl(12, 1, 50);
-	wait1Msec(1000);
-	PIDBaseTurn(45, 1, 30);
-}
-
-//left side cube auto
-void auto4()
+void rightCubeStar()
 {
 }
 
-//left side star auto
-void auto5()
+void leftCube()
 {
 }
 
-//left side cube and star auto
-void auto6()
+void leftStar()
 {
 }
 
-//PID cube right auto
-void auto7()
-{
-}
-
-//PID star right auto
-void auto8()
+void leftCubeStar()
 {
 }
 
 void pre_auton()
 {
-	// Set bStopTasksBetweenModes to false if you want to keep user created tasks running between
-	// Autonomous and Tele-Op modes. You will need to manage all user created tasks if set to false.
-	bStopTasksBetweenModes = true;
-	autoSelection();
+// Set bStopTasksBetweenModes to false if you want to keep user created tasks running between
+// Autonomous and Tele-Op modes. You will need to manage all user created tasks if set to false.
+bStopTasksBetweenModes = true;
+//autoSelection();
+bDisplayCompetitionStatusOnLcd = false;
+bLCDBacklight = true;
+startTask(LCDControl);
 }
 
 
@@ -663,37 +733,23 @@ void pre_auton()
 
 task autonomous()
 {
-	if (autoMode == 1)
+	stopTask(LCDControl);
+	stopTask(driverControlViewValues);
+	switch(auton)
 	{
-		auto1();
-	}
-	else if (autoMode == 2)
-	{
-		auto2();
-	}
-	else if (autoMode == 3)
-	{
-		auto3();
-	}
-	else if (autoMode == 4)
-	{
-		auto4();
-	}
-	else if (autoMode == 5)
-	{
-		auto5();
-	}
-	else if (autoMode == 6)
-	{
-		auto6();
-	}
-	else if (autoMode == 7)
-	{
-		auto7();
-	}
-	else if (autoMode == 8)
-	{
-		auto8();
+		case 1:
+		rightCube();
+		break;
+		case 2:
+		rightStar();
+		break;
+		case 3:
+		leftCube();
+		break;
+		case 4:
+		leftStar();
+		default:
+		break;
 	}
 }
 
@@ -702,151 +758,150 @@ task autonomous()
 
 task usercontrol()
 {
-	while (true)
-	{
-		// Strike fear into the hearts of our opponents
-		if (!sound && vexRT[Btn8U]==1){
-			playSoundFile("sound.wav");
-			sound = true;
-		}
-		if (sound && vexRT[Btn8D]==0){
-			sound = false;
-		}
+bLCDBacklight = true;
+stopTask(LCDControl);
+while (true)
+{
 
-		// Enables reverse mode
-		if (vexRT[Btn7D] == 1 && !b8DOld) {
-			if (reverser == false){
-				reverser = true;
-			}
-			else if (reverser){
-				reverser = false;
-			}
-			b7DOld = true;
+	// Enables reverse mode
+	if (vexRT[Btn7D] == 1 && !b8DOld) {
+		if (reverser == false){
+			reverser = true;
 		}
-
-		if (vexRT[Btn7D] == 0 && b7DOld){
-			b7DOld = false;
+		else if (reverser){
+			reverser = false;
 		}
+		b7DOld = true;
+	}
 
-		//Create "deadzone" for Y1/Ch2
-		if(abs(vexRT[Ch2]) > threshold)
-			Y1 = -vexRT[Ch2];
-		else
-			Y1 = 0;
-		//Create "deadzone" for Y2/Ch3
-		if(abs(vexRT[Ch3]) > threshold)
-			Y2 = vexRT[Ch3];
-		else
-			Y2 = 0;
+	if (vexRT[Btn7D] == 0 && b7DOld){
+		b7DOld = false;
+	}
 
-		//Remote Control Commands
+	//Create "deadzone" for Y1/Ch2
+	if(abs(vexRT[Ch2]) > threshold)
+		Y1 = -vexRT[Ch2];
+	else
+		Y1 = 0;
+	//Create "deadzone" for Y2/Ch3
+	if(abs(vexRT[Ch3]) > threshold)
+		Y2 = vexRT[Ch3];
+	else
+		Y2 = 0;
 
-		if (reverser){ // Reverses the controls
-			motor[rightDT] = Y2;
-			motor[leftDT] = -Y1;
-		}
-		if (!reverser){
-			motor[rightDT] = Y1;
-			motor[leftDT] = -Y2;
-		}
+	//Remote Control Commands
+
+	if (reverser){ // Reverses the controls
+		motor[rightDT] = -Y2;
+		motor[leftDT] = Y1;
+	}
+	if (!reverser){
+		motor[rightDT] = -Y1;
+		motor[leftDT] = Y2;
+	}
 
 
-		//Remote Control Commands
+	//Remote Control Commands
 
-		if (reverser){ // Reverses the controls
-			motor[rightDT] = Y2;
-			motor[leftDT] = -Y1;
-		}
-		if (!reverser){
-			motor[rightDT] = Y1;
-			motor[leftDT] = -Y2;
-		}
+	if (reverser){ // Reverses the controls
+		motor[rightDT] = -Y2;
+		motor[leftDT] = Y1;
+	}
+	if (!reverser){
+		motor[rightDT] = -Y1;
+		motor[leftDT] = Y2;
+	}
 
-		//---Manual Lift Control--//
+	//---Manual Lift Control--//
 
-		// Disable the automatic lift if any manual lift input detected
-		if (vexRT[Btn6D] == 1 || vexRT[Btn6U] == 1 || vexRT[Btn8D] == 1){
-			liftAutoMode = false;
-		}
+	// Disable the automatic lift if any manual lift input detected
+	if (vexRT[Btn6D] == 1 || vexRT[Btn6U] == 1 || vexRT[Btn8D] == 1){
+		liftAutoMode = false;
+	}
 
-		// Raise lift
-		if (vexRT[Btn6U] == 1 && !hold) {
-			raiseLift();
-		}
-
-		// Lower lift
-		if (vexRT[Btn6D] == 1 && !hold) {
-			lowerLift();
-		}
-
-		// Enable or disable hold mode
-		if (vexRT[Btn8D] == 1 && !b8DOld){
-			if (hold == false){
-				hold = true;
-			}
-			else{
-				hold = false;
-			}
-			b8DOld = true;
-		}
-		if (vexRT[Btn8D] == 0 && b8DOld){
-			b8DOld = false;
-		}
-
-		// Locks the lift in place
-		if (hold){
-			holdLift();
-		}
-
-		// Manually disable the lift
-		if (vexRT[Btn6U] == 0 && !hold && vexRT[Btn6D] == 0 && !liftAutoMode) {
-			stopLift();
-		}
-
-		// Claw
-		if (vexRT[Btn5U] == 1){
-			openClaw();
-		}
-		if (vexRT[Btn5D] == 1){
-			closeClaw();
-		}
-		if (vexRT[Btn5D] == 0 && vexRT[Btn5U] == 0){
-			stopClaw();
-		}
-
-		//--- Automatic Lift Control---//
-
-		// Enables automatic raise to top
-		if (vexRT[Btn7R] == 1 && !autoRaiseLift){
-			autoLowerLift = false;
-			autoRaiseLift = true;
-			autoMiddleLift = false;
-			liftAutoMode = true;
-		}
-
-		// Enables automatic lower to bottom
-		if (vexRT[Btn7L] == true && !autoLowerLift) {
-			autoRaiseLift = false;
-			autoLowerLift = true;
-			autoMiddleLift = false;
-			liftAutoMode = true;
-		}
-
-		// Enables raise or lower to midpoint
-		if (vexRT[Btn7U] == true && !autoLowerLift) {
-			autoRaiseLift = false;
-			autoLowerLift = false;
-			autoMiddleLift = true;
-			liftAutoMode = true;
-		}
-
-		// Execute the automatic raise
-		if (liftAutoMode){
-			automaticLift(autoRaiseLift, autoLowerLift, autoMiddleLift);
-		}
-		// Turns off the automatic lift
-		if ((autoLowerLift || autoRaiseLift || autoMiddleLift) && !liftAutoMode){
-			stopLift();
+	// Raise lift
+	if (vexRT[Btn6U] == 1 && !hold) {
+		raiseLift();
+		if (SensorValue[leftIME] >= 650 && SensorValue[leftIME] <= 900)
+		{
+			openClawTogether();
 		}
 	}
+
+	// Lower lift
+	if (vexRT[Btn6D] == 1 && !hold) {
+		lowerLift();
+	}
+
+	// Enable or disable hold mode
+	if (vexRT[Btn8D] == 1 && !b8DOld){
+		if (hold == false){
+			hold = true;
+		}
+		else{
+			hold = false;
+		}
+		b8DOld = true;
+	}
+	if (vexRT[Btn8D] == 0 && b8DOld){
+		b8DOld = false;
+	}
+
+	// Locks the lift in place
+	if (hold){
+		holdLift();
+	}
+
+	// Manually disable the lift
+	if (vexRT[Btn6U] == 0 && !hold && vexRT[Btn6D] == 0 && !liftAutoMode) {
+		stopLift();
+	}
+
+	// Claw
+	if (vexRT[Btn5U] == 1){
+		openClaw();
+	}
+	if (vexRT[Btn5D] == 1){
+		closeClaw();
+	}
+	if (vexRT[Btn5D] == 0 && vexRT[Btn5U] == 0){
+		stopClaw();
+	}
+
+	//--- Automatic Lift Control---//
+
+	// Enables automatic raise to top
+	if (vexRT[Btn7R] == 1 && !autoRaiseLift){
+		autoLowerLift = false;
+		autoRaiseLift = true;
+		autoMiddleLift = false;
+		liftAutoMode = true;
+	}
+
+	// Enables automatic lower to bottom
+	if (vexRT[Btn7L] == true && !autoLowerLift) {
+		autoRaiseLift = false;
+		autoLowerLift = true;
+		autoMiddleLift = false;
+		liftAutoMode = true;
+	}
+
+
+	// Enables raise or lower to midpoint
+	if (vexRT[Btn7U] == true && !autoLowerLift) {
+		autoRaiseLift = false;
+		autoLowerLift = false;
+		autoMiddleLift = true;
+		liftAutoMode = true;
+	}
+
+	// Execute the automatic raise
+	if (liftAutoMode){
+		automaticLift(autoRaiseLift, autoLowerLift, autoMiddleLift);
+	}
+	// Turns off the automatic lift
+	if ((autoLowerLift || autoRaiseLift || autoMiddleLift) && !liftAutoMode){
+		stopLift();
+	}
+}
 }
