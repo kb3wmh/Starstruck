@@ -41,33 +41,18 @@
 
 
 // Autonomous Mode Variables
-int autoMode = 1;
-int driveForward = 1;
-int driveBack = -1;
-int left = 1;
-int right = 2;
-int forwards = 1;
-int backwards = -1;
-float wheelBase = 11.0; // Given in inches
-float fullTurnCircumference = PI * wheelBase;
-float wheelRotationDistance = 4.0 * PI;
 int auton = 0;
 
 //---Variables for User Control---//
 bool reverser = false;
-bool b7DOld = false;
-bool sound = false;
-bool b8DOld = false;
 bool hold = false;
 int driverControlModeCount = 1;
-int clawSpeedOpen = 127;
+bool autoClaw = false;
 
 //---Joystick Variables & Deadzone--//
 int Y2 = 0, Y1 = 0, threshold = 15;
 
 //---Constant lift parameters---//
-int liftEncoderMaxValue = 127;
-int liftEncoderMinValue = 0;
 int leftIntegratedEncoderMaxValue = 900;
 int leftIntegratedEncoderMinVlaue = 0;
 int liftMaxSpeed = 127;
@@ -345,20 +330,44 @@ void stopLift(){
 
 void closeClawTogether()
 {
-	while (SensorValue[leftClawPot] < 3450 && SensorValue[rightClawPot] > 600)
+	motor[clawRight] = -100;
+	motor[clawLeft] = -100;
+	while (SensorValue[leftClawPot] < 3450 || SensorValue[rightClawPot] > 600)
 	{
-		motor[clawRight] = -100;
-		motor[clawLeft] = -110;
+		if (SensorValue[leftClawPot] >= 3450){
+			motor[clawLeft] = 0;
+		}
+
+		if (SensorValue[rightClawPot] <= 600){
+			motor[clawRight] = 0;
+		}
+		if (vexRT[Btn8U] == 1){
+			break;
+		}
+
 	}
+
+	autoClaw = false;
 }
 
 void openClawTogether()
 {
-	while (SensorValue[leftClawPot] > 2430 && SensorValue[rightClawPot] < 1321)
+	motor[clawRight] = 127;
+	motor[clawLeft] = 127;
+	while (SensorValue[leftClawPot] > 2430 || SensorValue[rightClawPot] < 1321)
 	{
-		motor[clawRight] = 127;
-		motor[clawLeft] = 127;
+		if (SensorValue[leftClawPot] <= 2430){
+			motor[clawLeft] = 0;
+		}
+
+		if (SensorValue[rightClawPot] >= 1321){
+			motor[clawRight] = 0;
+		}
+		if (vexRT[Btn8U] == 1){
+			break;
+		}
 	}
+	autoClaw = false;
 }
 
 // Raises the lift
@@ -821,31 +830,31 @@ task usercontrol()
 	stopTask(LCDControl);
 	while (true)
 	{
-	//Displays battery voltage
-	clearLCDLine(0);
-	clearLCDLine(1);
-	//Primary voltage
-	displayLCDString(0, 0, "Primary:");
-	sprintf(mainBattery, "%1.2f%c", nImmediateBatteryLevel/1000.0, 'V');
-	displayNextLCDString(mainBattery);
-	//Backup voltage
-	displayLCDString(1, 0, "Backup:");
-	sprintf(backupBattery, "%1.2f%c", BackupBatteryLevel/1000.0, 'V');
-	displayNextLCDString(backupBattery);
+		//Displays battery voltage
+		clearLCDLine(0);
+		clearLCDLine(1);
+		//Primary voltage
+		displayLCDString(0, 0, "Primary:");
+		sprintf(mainBattery, "%1.2f%c", nImmediateBatteryLevel/1000.0, 'V');
+		displayNextLCDString(mainBattery);
+		//Backup voltage
+		displayLCDString(1, 0, "Backup:");
+		sprintf(backupBattery, "%1.2f%c", BackupBatteryLevel/1000.0, 'V');
+		displayNextLCDString(backupBattery);
 
-/*		// Enables reverse mode
+		/*		// Enables reverse mode
 		if (vexRT[Btn7D] == 1 && !b8DOld) {
-			if (reverser == false){
-				reverser = true;
-			}
-			else if (reverser){
-				reverser = false;
-			}
-			b7DOld = true;
+		if (reverser == false){
+		reverser = true;
+		}
+		else if (reverser){
+		reverser = false;
+		}
+		b7DOld = true;
 		}
 
 		if (vexRT[Btn7D] == 0 && b7DOld){
-			b7DOld = false;
+		b7DOld = false;
 		}*/
 
 		if (vexRT[Btn7D] == 1)
@@ -908,25 +917,6 @@ task usercontrol()
 			lowerLift();
 		}
 
-		// Enable or disable hold mode
-		if (vexRT[Btn8D] == 1 && !b8DOld){
-			if (hold == false){
-				hold = true;
-			}
-			else{
-				hold = false;
-			}
-			b8DOld = true;
-		}
-		if (vexRT[Btn8D] == 0 && b8DOld){
-			b8DOld = false;
-		}
-
-		// Locks the lift in place
-		if (hold){
-			holdLift();
-		}
-
 		// Manually disable the lift
 		if (vexRT[Btn6U] == 0 && !hold && vexRT[Btn6D] == 0 && !liftAutoMode) {
 			stopLift();
@@ -939,9 +929,15 @@ task usercontrol()
 		if (vexRT[Btn5D] == 1){
 			closeClaw2();
 		}
-		if (vexRT[Btn5D] == 0 && vexRT[Btn5U] == 0){
+		if (vexRT[Btn5D] == 0 && vexRT[Btn5U] == 0 && !autoClaw){
 			stopClaw();
 		}
+		if (vexRT[Btn7U] == 1)
+		{
+			autoClaw = true;
+			openClawTogether();
+		}
+
 
 		//--- Automatic Lift Control---//
 
@@ -957,11 +953,6 @@ task usercontrol()
 			autoRaiseLift = false;
 			autoLowerLift = true;
 			liftAutoMode = true;
-		}
-
-		if (vexRT[Btn7U] == 1)
-		{
-			openClawTogether();
 		}
 
 		// Execute the automatic raise
