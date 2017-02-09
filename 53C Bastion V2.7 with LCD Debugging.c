@@ -45,7 +45,6 @@ int auton = 0;
 
 //---Variables for User Control---//
 bool reverser = false;
-bool hold = false;
 int driverControlModeCount = 1;
 bool autoClaw = false;
 
@@ -109,7 +108,7 @@ void turnBase(int speed) //positive is clockwise
 int inchtoTicks (float inch) //torque motor
 {
 	int ticks;
-	ticks = inch*(627.2 *2 /( 4*PI));
+	ticks = inch*(360/( 4*PI));
 	return ticks;
 }
 
@@ -135,7 +134,7 @@ int timerValue (float seconds)
 void PIDBaseControl (float distance, float waitTime, float maxPower = 1)
 {
 	float Kp = .2; //constant
-	float Ki = 0.05; //constant...might want to be even closer to 0.0
+	float Ki = 0.03; //constant...might want to be even closer to 0.0
 	float Kd = 0.5; //might have to change this
 	int error;
 	float proportion;
@@ -146,7 +145,7 @@ void PIDBaseControl (float distance, float waitTime, float maxPower = 1)
 	float integralActiveZone = inchtoTicks(1.5); //value will probably have to get changed, smaller or larger
 	float integralPowerLimit = 50/Ki;
 	int finalPower;
-	float Kp_C = 0.01; //if you dont want drift error set this value to 0
+	float Kp_C = 0.0; //if you dont want drift error set this value to 0
 	int error_drift;
 	float proportion_drift;
 	bool timerBool = true;
@@ -193,7 +192,7 @@ void PIDBaseControl (float distance, float waitTime, float maxPower = 1)
 		{
 			finalPower = -maxPower * 127;
 		}
-		error_drift = (nMotorEncoder[rightFront] + nMotorEncoder[rightBack]) - (nMotorEncoder[leftFront] + nMotorEncoder[leftBack]);
+		error_drift = ((nMotorEncoder[rightFront] + nMotorEncoder[rightBack])/2) - ((nMotorEncoder[leftFront] + nMotorEncoder[leftBack])/2);
 		proportion_drift = Kp_C * error_drift;
 		moveLeftBase (finalPower + proportion_drift);
 		moveRightBase(finalPower - proportion_drift);
@@ -201,10 +200,12 @@ void PIDBaseControl (float distance, float waitTime, float maxPower = 1)
 		if (error < 30)
 		{
 			timerBool = false;
+			break;
 		}
 		if (timerBool)
 		{
 			clearTimer(T1);
+
 		}
 	}
 	moveBase(0);
@@ -352,21 +353,17 @@ void closeClawTogether()
 
 void openClawTogether()
 {
-	motor[clawRight] = 127;
-	motor[clawLeft] = 127;
-	while (SensorValue[leftClawPot] > 2430 || SensorValue[rightClawPot] < 1321)
-	{
-		if (SensorValue[leftClawPot] <= 2430){
-			motor[clawLeft] = 0;
-		}
 
-		if (SensorValue[rightClawPot] >= 1321){
-			motor[clawRight] = 0;
-		}
+	while (SensorValue[leftClawPot] > 2440 && SensorValue[rightClawPot] < 1321)
+	{
+		motor[clawRight] = 127;
+		motor[clawLeft] = 127;
 		if (vexRT[Btn8U] == 1){
 			break;
 		}
 	}
+	motor[clawRight] = 0;
+	motor[clawLeft] = 0;
 	autoClaw = false;
 }
 
@@ -766,11 +763,14 @@ void rightStar()
 //right cube and star auto
 void rightCubeStar()
 {
+
 }
 
 //left cube auto
 void leftCube()
 {
+	playSoundFile("sound.wav");
+	PIDBaseControl(12, 1, .5);
 }
 
 //left star auto
@@ -904,7 +904,7 @@ task usercontrol()
 		}
 
 		// Raise lift
-		if (vexRT[Btn6U] == 1 && !hold) {
+		if (vexRT[Btn6U] == 1) {
 			raiseLift();
 			if (SensorValue[leftIME] >= 650 && SensorValue[leftIME] <= 900)
 			{
@@ -913,12 +913,12 @@ task usercontrol()
 		}
 
 		// Lower lift
-		if (vexRT[Btn6D] == 1 && !hold) {
+		if (vexRT[Btn6D] == 1) {
 			lowerLift();
 		}
 
 		// Manually disable the lift
-		if (vexRT[Btn6U] == 0 && !hold && vexRT[Btn6D] == 0 && !liftAutoMode) {
+		if (vexRT[Btn6U] == 0 && vexRT[Btn6D] == 0 && !liftAutoMode) {
 			stopLift();
 		}
 
