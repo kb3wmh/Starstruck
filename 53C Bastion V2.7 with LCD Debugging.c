@@ -42,6 +42,8 @@
 
 // Autonomous Mode Variables
 int auton = 0;
+int left = 1;
+int right = 2;
 
 //---Variables for User Control---//
 bool reverser = false;
@@ -85,6 +87,11 @@ void moveLeftBase (int speed)
 	motor[leftDT] = speed;
 }
 
+void drive(int speed, int direction){
+	motor[leftDT] = speed * direction;
+	motor[rightDT] = speed * direction;
+}
+
 void turnBase(int speed) //positive is clockwise
 {
 	motor[leftDT] = speed;
@@ -103,20 +110,55 @@ void turnBase(int speed) //positive is clockwise
 
 //when my error is 30, the actual error in inches = .3
 
+void clearEncoders(){
+	SensorValue[leftBack] = 0;
+	SensorValue[leftFront] = 0;
+	SensorValue[rightBack] = 0;
+	SensorValue[rightFront] = 0;
+}
 
 //------User Conversions-------//
-int inchtoTicks (float inch) //torque motor
+int inchToTicks (float inch) //torque motor
 {
 	int ticks;
-	ticks = inch*(360/( 4*PI));
+	ticks = inch*(90/( 4*PI));
 	return ticks;
 }
 
 int degreesToTicks (float degree) //method is more accurate
 {
-	int ticksPerTurn = 3000; //this value is just a placeholder, not sure how many ticks per turn, depends on robot, we will have to calculate this
+	int ticksPerTurn = inchToTicks((11*PI)); //this value is just a placeholder, not sure how many ticks per turn, depends on robot, we will have to calculate this
 	int ticks = degree * ticksPerTurn / 360;
 	return ticks;
+}
+
+void driveForwardInches(float inch){
+	int distance = inchToTicks(inch) * 12.4;
+	clearEncoders();
+	motor[leftDT] = 50;
+	motor[rightDT] = 50;
+	while ((SensorValue[leftBack] + SensorValue[leftFront] + SensorValue[rightFront] + SensorValue[rightBack]) < distance){}
+	motor[leftDT] = 0;
+	motor[rightDT] = 0;
+}
+
+void degreeTurn(float degree, int direction){
+	int turnTicks = 6.9 * degreesToTicks(degree);
+	clearEncoders();
+	if (direction == left){
+		motor[leftDT] = -50;
+		motor[rightDT] = 50;
+		while (((SensorValue[leftBack] + SensorValue[leftFront]) >= -turnTicks) && ((SensorValue[rightBack] + SensorValue[rightFront]) <= turnTicks)){}
+		motor[leftDT] = 0;
+		motor[rightDT] = 0;
+	}
+	if (direction == right){
+		motor[leftDT] = 50;
+		motor[rightDT] = -50;
+		while (((SensorValue[leftBack] + SensorValue[leftFront]) <= turnTicks) && ((SensorValue[rightBack] + SensorValue[rightFront]) >= -turnTicks)){}
+		motor[leftDT] = 0;
+		motor[rightDT] = 0;
+	}
 }
 
 int timerValue (float seconds)
@@ -131,85 +173,6 @@ int timerValue (float seconds)
 }
 
 //-------------Drive Train PID CONTROLLER-------------//
-void PIDBaseControl (float distance, float waitTime, float maxPower = 1)
-{
-	float Kp = .2; //constant
-	float Ki = 0.03; //constant...might want to be even closer to 0.0
-	float Kd = 0.5; //might have to change this
-	int error;
-	float proportion;
-	int integralRaw;
-	float integral;
-	int lastError;
-	int derivative;
-	float integralActiveZone = inchtoTicks(1.5); //value will probably have to get changed, smaller or larger
-	float integralPowerLimit = 50/Ki;
-	int finalPower;
-	float Kp_C = 0.0; //if you dont want drift error set this value to 0
-	int error_drift;
-	float proportion_drift;
-	bool timerBool = true;
-	nMotorEncoder[rightFront] = 0;
-	nMotorEncoder[rightBack] = 0;
-	nMotorEncoder[leftFront] = 0;
-	nMotorEncoder[leftBack] = 0;
-	clearTimer(T1);
-
-
-	while (time1[T1] < timerValue(waitTime))
-	{
-		error = inchtoTicks(distance) - (nMotorEncoder[rightFront] + nMotorEncoder[rightBack] + nMotorEncoder[leftFront] + nMotorEncoder[leftBack]);
-		proportion = Kp * error;
-		if (abs(error) < integralActiveZone && error != 0)
-		{
-			integralRaw = integralRaw + error;
-		}
-		else
-		{
-			integralRaw = 0;
-		}
-		if (integralRaw > integralPowerLimit)
-		{
-			integralRaw = integralPowerLimit;
-		}
-		if (integralRaw < -integralPowerLimit)
-		{
-			integralRaw = - integralPowerLimit;
-		}
-		integral = Ki * integralRaw;
-		derivative = Kd*(error - lastError);
-		lastError = error;
-		if (error == 0)
-		{
-			derivative = 0;
-		}
-		finalPower = proportion + integral + derivative; //proportion + derivative + integral
-		if (finalPower > maxPower * 127)
-		{
-			finalPower = maxPower * 127;
-		}
-		else if (finalPower < -maxPower * 127)
-		{
-			finalPower = -maxPower * 127;
-		}
-		error_drift = ((nMotorEncoder[rightFront] + nMotorEncoder[rightBack])/2) - ((nMotorEncoder[leftFront] + nMotorEncoder[leftBack])/2);
-		proportion_drift = Kp_C * error_drift;
-		moveLeftBase (finalPower + proportion_drift);
-		moveRightBase(finalPower - proportion_drift);
-		wait1Msec(40);
-		if (error < 30)
-		{
-			timerBool = false;
-			break;
-		}
-		if (timerBool)
-		{
-			clearTimer(T1);
-
-		}
-	}
-	moveBase(0);
-}
 
 //---PID control for 0degree turning---//
 void PIDBaseTurn (float distance, float waitTime, float maxPower = 1)
@@ -237,7 +200,7 @@ void PIDBaseTurn (float distance, float waitTime, float maxPower = 1)
 
 	while (time1[T1] < timerValue(waitTime))
 	{
-		error = degreesToTicks(distance) - ((nMotorEncoder[leftFront] + nMotorEncoder[leftBack]) - (nMotorEncoder[rightFront] + nMotorEncoder[rightBack]));
+		error = degreesToTicks(distance) - (nMotorEncoder[leftFront]) - (nMotorEncoder[rightFront]);
 		proportion = Kp * error;
 		if (abs(error) < integralActiveZone && error != 0)
 		{
@@ -770,7 +733,13 @@ void rightCubeStar()
 void leftCube()
 {
 	playSoundFile("sound.wav");
-	PIDBaseControl(12, 1, .5);
+	driveForwardInches(54);
+	wait1Msec(333);
+	degreeTurn(180, left);
+	wait1Msec(333);
+	driveForwardInches(54);
+	wait1Msec(333);
+	degreeTurn(180, right);
 }
 
 //left star auto
