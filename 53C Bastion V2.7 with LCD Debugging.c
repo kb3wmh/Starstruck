@@ -55,7 +55,7 @@ int Y2 = 0, Y1 = 0, threshold = 15;
 
 //---Constant lift parameters---//
 int leftIntegratedEncoderMaxValue = 900;
-int leftIntegratedEncoderMinVlaue = 0;
+int leftIntegratedEncoderMinValue = 0;
 int liftMaxSpeed = 127;
 int up = 1;
 int down = -1;
@@ -66,37 +66,11 @@ bool autoLowerLift = false;
 bool liftAutoMode = false;
 int lift;
 
-//-------------PID LOOPS--------------//
 #pragma DebuggerWindows("Globals")
 #pragma DebuggerWindows("Motors")
 
 //---User Functions---//
-void moveBase(int speed)
-{
-	motor[leftDT] = speed;
-	motor[rightDT] = speed;
-}
 
-void moveRightBase (int speed)
-{
-	motor[rightDT] = speed;
-}
-
-void moveLeftBase (int speed)
-{
-	motor[leftDT] = speed;
-}
-
-void drive(int speed, int direction){
-	motor[leftDT] = speed * direction;
-	motor[rightDT] = speed * direction;
-}
-
-void turnBase(int speed) //positive is clockwise
-{
-	motor[leftDT] = speed;
-	motor[rightDT] = -speed;
-}
 
 //reading: ticks -- 627.2 ticks/revolution for a torque motor
 //reading: ticks -- 392 ticks/revolution for a high speed motor
@@ -132,12 +106,35 @@ int degreesToTicks (float degree) //method is more accurate
 	return ticks;
 }
 
+int timerValue (float seconds)
+{
+	int miliseconds;
+	miliseconds = seconds * 1000;
+	if (miliseconds > 250)
+	{
+		miliseconds = 250;
+	}
+	return miliseconds;
+}
+
+//-------------Robot Functions-------------//
+
 void driveForwardInches(float inch){
 	int distance = inchToTicks(inch) * 12.4;
 	clearEncoders();
 	motor[leftDT] = 50;
 	motor[rightDT] = 50;
 	while ((SensorValue[leftBack] + SensorValue[leftFront] + SensorValue[rightFront] + SensorValue[rightBack]) < distance){}
+	motor[leftDT] = 0;
+	motor[rightDT] = 0;
+}
+
+void driveBackwardInches(float inch){
+	int distance = inchToTicks(inch) * -12.4;
+	clearEncoders();
+	motor[leftDT] = -50;
+	motor[rightDT] = -50;
+	while (-1 * (SensorValue[leftBack] + SensorValue[leftFront] + SensorValue[rightFront] + SensorValue[rightBack]) > distance){}
 	motor[leftDT] = 0;
 	motor[rightDT] = 0;
 }
@@ -161,113 +158,11 @@ void degreeTurn(float degree, int direction){
 	}
 }
 
-int timerValue (float seconds)
-{
-	int miliseconds;
-	miliseconds = seconds * 1000;
-	if (miliseconds > 250)
-	{
-		miliseconds = 250;
-	}
-	return miliseconds;
-}
-
-//-------------Drive Train PID CONTROLLER-------------//
-
-//---PID control for 0degree turning---//
-void PIDBaseTurn (float distance, float waitTime, float maxPower = 1)
-{
-	//constants might want to be a little bigger, play around with them
-	float Kp = .2; //constant
-	float Ki = 0.05; //constant...might want to be even closer to 0.0
-	float Kd = 0.5; //might have to change this
-	int error;
-	float proportion;
-	int integralRaw;
-	float integral;
-	int lastError;
-	int derivative;
-	float integralActiveZone = inchtoTicks(1.5); //value will probably have to get changed, smaller or larger
-	float integralPowerLimit = 50/Ki;
-	int finalPower;
-	bool timerBool = true;
-	nMotorEncoder[rightFront] = 0;
-	nMotorEncoder[rightBack] = 0;
-	nMotorEncoder[leftFront] = 0;
-	nMotorEncoder[leftBack] = 0;
-	clearTimer(T1);
-
-
-	while (time1[T1] < timerValue(waitTime))
-	{
-		error = degreesToTicks(distance) - (nMotorEncoder[leftFront]) - (nMotorEncoder[rightFront]);
-		proportion = Kp * error;
-		if (abs(error) < integralActiveZone && error != 0)
-		{
-			integralRaw = integralRaw + error;
-		}
-		else
-		{
-			integralRaw = 0;
-		}
-		if (integralRaw > integralPowerLimit)
-		{
-			integralRaw = integralPowerLimit;
-		}
-		if (integralRaw < -integralPowerLimit)
-		{
-			integralRaw = - integralPowerLimit;
-		}
-		integral = Ki * integralRaw;
-		derivative = Kd*(error - lastError);
-		lastError = error;
-		if (error == 0)
-		{
-			derivative = 0;
-		}
-		finalPower = proportion + integral + derivative; //proportion + derivative + integral
-		if (finalPower > maxPower * 127)
-		{
-			finalPower = maxPower * 127;
-		}
-		else if (finalPower < -maxPower * 127)
-		{
-			finalPower = -maxPower * 127;
-		}
-		turnBase(finalPower);
-		wait1Msec(40);
-		if (error < 30)
-		{
-			timerBool = false;
-		}
-		if (timerBool)
-		{
-			clearTimer(T1);
-		}
-	}
-	turnBase(0);
-}
-
-
-
-//-------------Robot Functions-------------//
-
-
-void moveBase(float distance, int speed)
-{
-	SensorValue[rightFront] = 0;
-	while (inchtoTicks(SensorValue[rightFront]) < distance) {
-		motor[leftDT] = speed;
-		motor[rightDT] = speed;
-	}
-}
-
 // Stops the drivetrain movement
 void stopMovement(){
 	motor[leftDT] = 0;
 	motor[rightDT] = 0;
 }
-
 
 // Moves the lift. Takes two parameters: direction and speed.
 void moveLift(int direction, int liftSpeed){
@@ -278,11 +173,6 @@ void moveLift(int direction, int liftSpeed){
 	motor[topRight] = lift;
 	motor[midRight] = lift;
 	motor[botRight] = lift;
-}
-
-// Backspins the lift motors to keep it from falling
-void holdLift() {
-	moveLift(up, 10);
 }
 
 // Calls the holdLift() function to lock the lift
@@ -316,7 +206,6 @@ void closeClawTogether()
 
 void openClawTogether()
 {
-
 	while (SensorValue[leftClawPot] > 2440 && SensorValue[rightClawPot] < 1321)
 	{
 		motor[clawRight] = 127;
@@ -391,7 +280,7 @@ void automaticLift(bool autoRaiseLift, bool autoLowerLift) {
 	if (autoRaiseLift || autoLowerLift){
 		if (SensorValue[leftIME] > leftIntegratedEncoderMaxValue){
 			autoRaiseLift = false;
-			if (SensorValue[sensor_Lift] < leftIntegratedEncoderMinVlaue){
+			if (SensorValue[sensor_Lift] < leftIntegratedEncoderMinValue){
 				autoLowerLift = false;
 			}
 			if (autoRaiseLift == false && autoLowerLift == false){
@@ -407,6 +296,21 @@ void automaticLift(bool autoRaiseLift, bool autoLowerLift) {
 	}
 	if (autoLowerLift) {
 		lowerLift();
+	}
+}
+
+void percentLift(int percent){
+	float target = (percent / 100.0) * leftIntegratedEncoderMaxValue;
+	clearEncoders();
+	if (SensorValue[leftIME] > target){
+		lowerLift();
+		while (SensorValue[leftIME] > target){}
+		stopLift();
+	}
+	else if (SensorValue[leftIME] < target){
+		raiseLift();
+		while (SensorValue[leftIME] < target){}
+		stopLift();
 	}
 }
 
@@ -641,115 +545,113 @@ task LCDControl()
 //right cube auto
 void rightCube()
 {
-	openClaw();
-	wait1Msec(250);
-	stopClaw();
-	wait1Msec(250);
-	lowerLift();
-	wait1Msec(500);
-	moveBase(sqrt(4)*12, 100);
-	stopMovement();
-	wait1Msec(500);
-	closeClaw();
-	raiseLift();
-	wait1Msec(250);
-	stopLift();
-	holdLift();
-	wait1Msec(250);
-	SensorValue[rightFront] = 0;
-	SensorValue[leftFront] = 0;
-	SensorValue[rightBack] = 0;
-	SensorValue[leftBack] = 0;
-	wait1Msec(500);
-	wait1Msec(500);
-	while(SensorValue[rightFront] - SensorValue[leftFront] < 400) {
-		motor[leftDT] = -80;
-		motor[rightDT] = 80;
-	}
-	motor[leftDT] = -80;
-	motor[rightDT] = -80;
-	wait1Msec(800);
-	stopMovement();
-	wait1Msec(200);
-	raiseLift();
-	wait1Msec(850);
-	openClaw();
-	wait1Msec(400);
-	stopLift();
-	wait1Msec(100);
-	stopClaw();
+	openClawTogether();
+	int distanceToCube = 20;
+	driveForwardInches(distanceToCube);
+	closeClawTogether();
+	int turn = 100;
+	degreeTurn(turn, left);
+	driveBackwardInches(12);
+	percentLift(100);
+	openClawTogether();
+	percentLift(0);
 }
 
 //right star auto
 void rightStar()
 {
-	openClaw();
-	wait1Msec(500);
-	stopClaw();
-	wait1Msec(3000);
-	lowerLift();
-	wait1Msec(500);
-	closeClaw();
-	wait1Msec(200);
-	stopClaw();
-	wait1Msec(500);
-	motor[leftDT] = 100;
-	motor[rightDT] = 100;
-	wait1Msec(2500);
-	stopMovement();
-	wait1Msec(100);
-	closeClaw();
-	raiseLift();
-	wait1Msec(800);
-	holdLift();
-	wait1Msec(500);
-	motor[leftDT] = -100;
-	motor[rightDT] = -100;
-	wait1Msec(1200);
-	stopMovement();
-	wait1Msec(100);
-	motor[leftDT] = 50;
-	motor[leftDT] = -50;
-	wait1Msec(1550);
-	motor[leftDT] = -100;
-	motor[rightDT] = -100;
-	wait1Msec(1000);
-	raiseLift();
-	wait1Msec(300);
-	openClaw();
-	wait1Msec(1000);
-	stopClaw();
-	wait1Msec(3000);
-	stopLift();
+	openClawTogether();
+	percentLift(5);
+	int starDistance = 30;
+	driveForwardInches(starDistance);
+	closeClawTogether();
+	driveBackwardInches(starDistance);
+	degreeTurn(90, left);
+	driveForwardInches(24);
+	degreeTurn(180, right);
+	driveBackwardInches(24);
+	percentLift(100);
+	openClawTogether();
+	percentLift(10);
 }
 
 //right cube and star auto
 void rightCubeStar()
 {
-
+	openClawTogether();
+	int distanceToCube = 20;
+	driveForwardInches(distanceToCube);
+	closeClawTogether();
+	int turn = 100;
+	degreeTurn(turn, left);
+	driveBackwardInches(12);
+	percentLift(100);
+	openClawTogether();
+	percentLift(5);
+	percentLift(5);
+	driveForwardInches(48);
+	closeClawTogether();
+	driveBackwardInches(48);
+	percentLift(100);
+	openClawTogether();
+	percentLift(5);
 }
 
 //left cube auto
 void leftCube()
 {
-	playSoundFile("sound.wav");
-	driveForwardInches(54);
-	wait1Msec(333);
-	degreeTurn(180, left);
-	wait1Msec(333);
-	driveForwardInches(54);
-	wait1Msec(333);
-	degreeTurn(180, right);
+	openClawTogether();
+	percentLift(5);
+	int distanceToCube = 20;
+	driveForwardInches(distanceToCube);
+	closeClawTogether();
+	int turn = 100;
+	degreeTurn(turn, right);
+	driveBackwardInches(12);
+	percentLift(100);
+	openClawTogether();
+	percentLift(10);
 }
 
 //left star auto
 void leftStar()
 {
+	openClawTogether();
+	percentLift(5);
+	int starDistance = 30;
+	driveForwardInches(starDistance);
+	closeClawTogether();
+	driveBackwardInches(starDistance);
+	degreeTurn(90, right);
+	driveForwardInches(24);
+	degreeTurn(180, left);
+	driveBackwardInches(24);
+	percentLift(100);
+	openClawTogether();
+	percentLift(10);
 }
 
 ///left cube and star auto
 void leftCubeStar()
 {
+	openClawTogether();
+	percentLift(5);
+	int distanceToCube = 20;
+	driveForwardInches(distanceToCube);
+	closeClawTogether();
+	int turn = 100;
+	degreeTurn(turn, right);
+	driveBackwardInches(12);
+	percentLift(100);
+	openClawTogether();
+	percentLift(5);
+	percentLift(5);
+	driveForwardInches(48);
+	closeClawTogether();
+	driveBackwardInches(48);
+	percentLift(100);
+	openClawTogether();
+	percentLift(5);
 }
 
 void pre_auton()
@@ -771,6 +673,7 @@ task autonomous()
 {
 	stopTask(LCDControl);
 	stopTask(driverControlViewValues);
+	playSoundFile("sound.wav");
 	switch(auton)
 	{
 	case 1:
