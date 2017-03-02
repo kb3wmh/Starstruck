@@ -134,7 +134,7 @@ void driveBackwardInches(float inch){
 	clearEncoders();
 	motor[leftDT] = -50;
 	motor[rightDT] = -50;
-	while (-1 * (SensorValue[leftBack] + SensorValue[leftFront] + SensorValue[rightFront] + SensorValue[rightBack]) > distance){}
+	while ((SensorValue[leftBack] + SensorValue[leftFront] + SensorValue[rightFront] + SensorValue[rightBack]) > distance){}
 	motor[leftDT] = 0;
 	motor[rightDT] = 0;
 }
@@ -193,6 +193,28 @@ void closeClawTogether()
 		}
 
 		if (SensorValue[rightClawPot] <= 600){
+			motor[clawRight] = 0;
+		}
+		if (vexRT[Btn8U] == 1){
+			break;
+		}
+
+	}
+
+	autoClaw = false;
+}
+
+void closeClawCube()
+{
+	motor[clawRight] = -100;
+	motor[clawLeft] = -100;
+	while (SensorValue[leftClawPot] < 3200 || SensorValue[rightClawPot] > 760)
+	{
+		if (SensorValue[leftClawPot] >= 3200){
+			motor[clawLeft] = 0;
+		}
+
+		if (SensorValue[rightClawPot] <= 760){
 			motor[clawRight] = 0;
 		}
 		if (vexRT[Btn8U] == 1){
@@ -302,14 +324,22 @@ void automaticLift(bool autoRaiseLift, bool autoLowerLift) {
 void percentLift(int percent){
 	float target = (percent / 100.0) * leftIntegratedEncoderMaxValue;
 	clearEncoders();
+	bool toOpen = true;
 	if (SensorValue[leftIME] > target){
 		lowerLift();
-		while (SensorValue[leftIME] > target){}
+		while (SensorValue[leftIME] > target){
+		}
 		stopLift();
 	}
 	else if (SensorValue[leftIME] < target){
 		raiseLift();
-		while (SensorValue[leftIME] < target){}
+		while (SensorValue[leftIME] < target){
+			if (SensorValue[leftIME] > 700 && toOpen)
+			{
+				openClawTogether();
+				toOpen = false;
+			}
+		}
 		stopLift();
 	}
 }
@@ -505,6 +535,12 @@ void displayAuton(){
 	case 14:
 		backRightBaseValue();
 		break;
+	case 15:
+		displayLCDCenteredString(0, "Right Cube Star");
+		break;
+	case 16:
+		displayLCDCenteredString(0, "Left Cube Star");
+		break;
 	default:
 		displayLCDCenteredString(0, "no auto");
 	}
@@ -546,14 +582,20 @@ task LCDControl()
 void rightCube()
 {
 	openClawTogether();
-	int distanceToCube = 20;
+	wait1Msec(333);
+	percentLift(0);
+	int distanceToCube = (sqrt(13) * 12) - 3;
 	driveForwardInches(distanceToCube);
-	closeClawTogether();
-	int turn = 100;
+	wait1Msec(333);
+	closeClawCube();
+	percentLift(20);
+	int turn = 115;
 	degreeTurn(turn, left);
-	driveBackwardInches(12);
+	wait1Msec(333);
+	driveBackwardInches(17);
+	wait1Msec(333);
 	percentLift(100);
-	openClawTogether();
+	closeClawTogether();
 	percentLift(0);
 }
 
@@ -578,22 +620,31 @@ void rightStar()
 //right cube and star auto
 void rightCubeStar()
 {
+	driveForwardInches(3);
 	openClawTogether();
-	int distanceToCube = 20;
+	wait1Msec(333);
+	percentLift(0);
+	int distanceToCube = (sqrt(13) * 12) - 6;
 	driveForwardInches(distanceToCube);
-	closeClawTogether();
-	int turn = 100;
+	wait1Msec(333);
+	closeClawCube();
+	percentLift(20);
+	int turn = 115;
 	degreeTurn(turn, left);
-	driveBackwardInches(12);
+	wait1Msec(333);
+	driveBackwardInches(17);
+	wait1Msec(333);
 	percentLift(100);
+	wait1Msec(333);
+	percentLift(0);
 	openClawTogether();
-	percentLift(5);
-	percentLift(5);
-	driveForwardInches(48);
-	closeClawTogether();
-	driveBackwardInches(48);
+	driveForwardInches(36);
+	closeClaw();
+	wait1Msec(750);
+	stopClaw();
+	driveBackwardInches(36);
 	percentLift(100);
-	openClawTogether();
+	wait1Msec(333);
 	percentLift(5);
 }
 
@@ -601,16 +652,21 @@ void rightCubeStar()
 void leftCube()
 {
 	openClawTogether();
-	percentLift(5);
-	int distanceToCube = 20;
+	wait1Msec(333);
+	percentLift(0);
+	int distanceToCube = (sqrt(13) * 12) - 3;
 	driveForwardInches(distanceToCube);
-	closeClawTogether();
-	int turn = 100;
+	wait1Msec(333);
+	closeClawCube();
+	percentLift(20);
+	int turn = 115;
 	degreeTurn(turn, right);
-	driveBackwardInches(12);
+	wait1Msec(333);
+	driveBackwardInches(17);
+	wait1Msec(333);
 	percentLift(100);
-	openClawTogether();
-	percentLift(10);
+	closeClawTogether();
+	percentLift(0);
 }
 
 //left star auto
@@ -635,20 +691,24 @@ void leftStar()
 void leftCubeStar()
 {
 	openClawTogether();
-	percentLift(5);
-	int distanceToCube = 20;
+	wait1Msec(333);
+	percentLift(0);
+	int distanceToCube = (sqrt(13) * 12) - 3;
 	driveForwardInches(distanceToCube);
-	closeClawTogether();
-	int turn = 100;
+	wait1Msec(333);
+	closeClawCube();
+	percentLift(20);
+	int turn = 115;
 	degreeTurn(turn, right);
-	driveBackwardInches(12);
+	wait1Msec(333);
+	driveBackwardInches(17);
+	wait1Msec(333);
 	percentLift(100);
-	openClawTogether();
-	percentLift(5);
-	percentLift(5);
-	driveForwardInches(48);
 	closeClawTogether();
-	driveBackwardInches(48);
+	percentLift(0);
+	driveForwardInches(34);
+	closeClawTogether();
+	driveBackwardInches(34);
 	percentLift(100);
 	openClawTogether();
 	percentLift(5);
@@ -687,6 +747,13 @@ task autonomous()
 		break;
 	case 4:
 		leftStar();
+		break;
+	case 15:
+		rightCubeStar();
+		break;
+	case 16:
+		leftCubeStar();
+		break;
 	default:
 		break;
 	}
