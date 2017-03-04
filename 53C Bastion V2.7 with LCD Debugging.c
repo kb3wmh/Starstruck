@@ -244,10 +244,10 @@ void openClawTogether()
 // Raises the lift
 void raiseLift() {
 	moveLift(up, liftMaxSpeed);
-	if (SensorValue[leftIME] == 700)
+	/*if (SensorValue[leftIME] == 700)
 	{
 		openClawTogether();
-	}
+	}*/
 }
 
 // Lower the lift
@@ -581,10 +581,11 @@ task LCDControl()
 //right cube auto
 void rightCube()
 {
+driveForwardInches(3);
 	openClawTogether();
 	wait1Msec(333);
 	percentLift(0);
-	int distanceToCube = (sqrt(13) * 12) - 3;
+	int distanceToCube = (sqrt(13) * 12) - 6;
 	driveForwardInches(distanceToCube);
 	wait1Msec(333);
 	closeClawCube();
@@ -595,7 +596,7 @@ void rightCube()
 	driveBackwardInches(17);
 	wait1Msec(333);
 	percentLift(100);
-	closeClawTogether();
+	wait1Msec(333);
 	percentLift(0);
 }
 
@@ -651,10 +652,11 @@ void rightCubeStar()
 //left cube auto
 void leftCube()
 {
+	driveForwardInches(3);
 	openClawTogether();
 	wait1Msec(333);
 	percentLift(0);
-	int distanceToCube = (sqrt(13) * 12) - 3;
+	int distanceToCube = (sqrt(13) * 12) - 6;
 	driveForwardInches(distanceToCube);
 	wait1Msec(333);
 	closeClawCube();
@@ -665,7 +667,7 @@ void leftCube()
 	driveBackwardInches(17);
 	wait1Msec(333);
 	percentLift(100);
-	closeClawTogether();
+	wait1Msec(333);
 	percentLift(0);
 }
 
@@ -690,10 +692,11 @@ void leftStar()
 ///left cube and star auto
 void leftCubeStar()
 {
+	driveForwardInches(3);
 	openClawTogether();
 	wait1Msec(333);
 	percentLift(0);
-	int distanceToCube = (sqrt(13) * 12) - 3;
+	int distanceToCube = (sqrt(13) * 12) - 6;
 	driveForwardInches(distanceToCube);
 	wait1Msec(333);
 	closeClawCube();
@@ -704,13 +707,16 @@ void leftCubeStar()
 	driveBackwardInches(17);
 	wait1Msec(333);
 	percentLift(100);
-	closeClawTogether();
+	wait1Msec(333);
 	percentLift(0);
-	driveForwardInches(34);
-	closeClawTogether();
-	driveBackwardInches(34);
-	percentLift(100);
 	openClawTogether();
+	driveForwardInches(36);
+	closeClaw();
+	wait1Msec(750);
+	stopClaw();
+	driveBackwardInches(36);
+	percentLift(100);
+	wait1Msec(333);
 	percentLift(5);
 }
 
@@ -845,10 +851,6 @@ task usercontrol()
 		// Raise lift
 		if (vexRT[Btn6U] == 1) {
 			raiseLift();
-			if (SensorValue[leftIME] >= 650 && SensorValue[leftIME] <= 900)
-			{
-				openClawTogether();
-			}
 		}
 
 		// Lower lift
